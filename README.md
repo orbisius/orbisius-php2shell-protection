@@ -126,6 +126,12 @@ site keeps working, unprotected.
 
 ### 1. Set your admin IPs (the allowlist)
 
+> ⚠️ **Change these first — the shipped IPs are placeholders that match nobody.**
+> `203.0.113.5`, `198.51.100.7` and `198.51.100.0/24` are **RFC 5737 documentation
+> addresses** used here only as examples; they belong to no real host. Deploy them
+> unchanged and the allowlist exempts **no one** — every body-carrying request (yours
+> included) is then treated as non-allowlisted. **Replace every placeholder before you deploy.**
+
 Replace the placeholders `203.0.113.5` / `198.51.100.7` (they match nobody) with
 your office / VPN / admin addresses. Leave them to block everyone (no exemption).
 
@@ -133,6 +139,7 @@ your office / VPN / admin addresses. Leave them to block everyone (no exemption)
 (they share one allowlist). `-R` matches a single IP **or** a CIDR range:
 
 ```apache
+# Replace the placeholder IPs/CIDRs in BOTH lines below with YOUR admin addresses — they match nobody as-is:
 RewriteCond expr "! (-R '203.0.113.5' || -R '198.51.100.0/24')"
 ...
 <If "! (-R '203.0.113.5' || -R '198.51.100.0/24')">
@@ -143,6 +150,7 @@ Use the `! ( -R a || -R b )` spelling **exactly** — the natural-looking
 **Apache 2.2** — one `RewriteCond` per IP; for a range use a regex prefix:
 
 ```apache
+# Replace this placeholder with YOUR admin IP — it matches nobody as-is (one line per IP):
 RewriteCond %{REMOTE_ADDR} !=203.0.113.5
 RewriteCond %{REMOTE_ADDR} !^192\.168\.
 ```
@@ -312,7 +320,7 @@ the `if` line, then reload. It has done its job.
 **Apache** (2.4 shown):
 ```apache
 RewriteCond %{REQUEST_METHOD} !^(GET|HEAD)$                       # only methods with a body
-RewriteCond expr "! (-R '203.0.113.5' || -R '198.51.100.7')"     # …from a NON-allowlisted client
+RewriteCond expr "! (-R '203.0.113.5' || -R '198.51.100.7')"     # …from a NON-allowlisted client (both IPs are PLACEHOLDERS — replace)
 RewriteCond %{HTTP:Content-Type} multipart/form-data [NC,OR]     # …that is multipart …
 RewriteCond %{HTTP:Content-Length} [0-9]{7,}$                    # … OR a body >= ~1 MB
 RewriteRule ^ - [R=404,L,E=ORBISIUS_CVE_MULTIPART_BLOCK:1]       # → silent 404 + log flag
