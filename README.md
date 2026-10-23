@@ -77,6 +77,12 @@ GET and HEAD are left alone):
   (it counts the actual bytes). **Per-IP** on Apache 2.4; **global-only** on Apache
   2.2 and Nginx.
 
+On **Apache with mod_php**, the config also switches PHP's `session.upload_progress`
+feature **off outright** (the CVE-2026-109619 vector) for every client — the
+`<IfModule php_*>` block overrides php.ini even if it wasn't disabled there, and a
+server/vhost deploy locks it so an app can't `ini_set()` it back on. (Under PHP-FPM
+those directives don't apply — disable it in the FPM pool or php.ini.)
+
 ## What it does NOT block
 
 - CVE-2026-109619 triggers that are **not** multipart (a bad per-request INI
@@ -193,6 +199,10 @@ widen to `All` just for this).
   contents at the **very top**, above the app's own rules. Patch every other `.htaccess`
   under the docroot that has rewrite rules too
   (`find docroot -name .htaccess -exec grep -il rewrite {} +`).
+- **Omit the `<IfModule php_*>` block at the end** — `php_admin_flag` is not allowed in
+  `.htaccess` and 500s the site. The rewrite rule already blocks the multipart
+  upload-progress delivery for non-allowlisted clients; with root, disable the feature
+  via method B/C or php.ini instead.
 
 ### 3. Prove it (don't skip — every failure above is silent)
 
