@@ -149,26 +149,14 @@ RemoteIPInternalProxy 10.0.0.5        # or RemoteIPTrustedProxy for public range
 there is no `mod_remoteip` — block at the proxy/CDN instead. **Never** test
 `X-Forwarded-For` in a `RewriteCond` yourself: any client can forge it.
 
-### 2. Deploy — pick one
+### 2. Deploy — pick the one that matches your access
 
-**A — `.htaccess` (one site, no root, no reload).** Takes effect on the next request;
-needs `AllowOverride FileInfo` (don't widen to `All` just for this).
-- No `.htaccess` in the document root yet → save the edition there as `.htaccess`.
-- One already exists (WordPress, Laravel…) → **do not overwrite it**; paste this file's
-  contents at the **very top**, above the app's own rules. Patch every other
-  `.htaccess` under the docroot that has rewrite rules too
-  (`find docroot -name .htaccess -exec grep -il rewrite {} +`).
+#### Root access (you can edit Apache's config and reload it)
 
-**B — one `<VirtualHost>` (one site, needs root + reload; survives any `.htaccess`).**
-Paste the blocks at vhost level in the `:80` **and** the `:443` block, then reload:
-```bash
-apachectl -t && systemctl reload apache2
-```
-
-**C — server config = GLOBAL (EVERY site on the box; needs root + reload).** Adding the
-rules to the server configuration applies them to **every virtual host / every site this
-Apache instance serves, all at once** — one place, no per-site edits, nothing to repeat
-when you add a site later. With root, `Include` the repo file in place (any distro):
+**Global — protect EVERY site on the box at once.** Adding the rules to the server
+configuration applies them to **every virtual host / every site this Apache instance
+serves** — one place, no per-site edits, nothing to repeat when you add a site later.
+`Include` the repo file in place (works on any distro):
 ```bash
 # add this line in httpd.conf / apache2.conf, or any file it already includes:
 Include /path/to/orbisius-php2shell-protection/apache/php2shell-2.4.conf
@@ -181,15 +169,30 @@ a2enconf orbisius-php2shell
 # RHEL / Alma / Rocky:
 cp apache/php2shell-2.4.conf /etc/httpd/conf.d/orbisius-php2shell.conf
 ```
-Then test the config and reload (`httpd` instead of `apache2` on RHEL):
+
+**One site only — paste it into that site's `<VirtualHost>`.** Put the blocks at vhost
+level in the `:80` **and** the `:443` block. (Survives any `.htaccess` the site has.)
+
+Either way, test the config and reload (`httpd` instead of `apache2` on RHEL):
 ```bash
 apachectl -t && systemctl reload apache2
 ```
-**One caveat for virtual-host setups:** the body cap is inherited by every vhost as
-written, but Apache does **not** inherit server-level `mod_rewrite` rules into a
-`<VirtualHost>`, so the 404 rule reaches only vhosts that pull it in. On Apache 2.4.8+
-add, at server level, `RewriteOptions InheritDownBefore` (each vhost still needs its own
-`RewriteEngine On`); otherwise deploy per site with A or B.
+**Caveat for virtual-host setups:** the body cap is inherited by every vhost, but Apache
+does **not** inherit server-level `mod_rewrite` rules into a `<VirtualHost>`, so the
+global 404 rule reaches only vhosts that pull it in. On Apache 2.4.8+ add, at server
+level, `RewriteOptions InheritDownBefore` (each vhost still needs its own
+`RewriteEngine On`); otherwise paste it into each `<VirtualHost>` as above.
+
+#### No root access (shared hosting — `.htaccess`)
+
+Drop the rules into the document root's `.htaccess` — it takes effect on the next
+request, no reload. Needs `AllowOverride FileInfo` (most shared hosts allow it; don't
+widen to `All` just for this).
+- No `.htaccess` there yet → save the edition as `.htaccess`.
+- One already exists (WordPress, Laravel…) → **do not overwrite it**; paste this file's
+  contents at the **very top**, above the app's own rules. Patch every other `.htaccess`
+  under the docroot that has rewrite rules too
+  (`find docroot -name .htaccess -exec grep -il rewrite {} +`).
 
 ### 3. Prove it (don't skip — every failure above is silent)
 
