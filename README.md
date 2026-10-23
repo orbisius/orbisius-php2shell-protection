@@ -10,6 +10,10 @@ for servers running a PHP version you **cannot patch right now**.
 | Apache **2.2** | [`apache/php2shell-2.2.conf`](apache/php2shell-2.2.conf) | single IP, or a regex prefix for a range | global only (optional) |
 | **Nginx** | [`nginx/php2shell.conf`](nginx/php2shell.conf) | single IP **or** CIDR range (`geo`) | global only (optional) |
 
+> **Shared hosting (no root)?** Use the matching **`*-htaccess.conf`** Apache edition —
+> the same rules without the server-only PHP directive (`php_admin_flag` 500s in `.htaccess`).
+> See **Install — Apache** below.
+
 ---
 
 ## ⚠️ Disclaimer — read this first
@@ -191,18 +195,19 @@ level, `RewriteOptions InheritDownBefore` (each vhost still needs its own
 
 #### No root access (shared hosting — `.htaccess`)
 
-Drop the rules into the document root's `.htaccess` — it takes effect on the next
-request, no reload. Needs `AllowOverride FileInfo` (most shared hosts allow it; don't
-widen to `All` just for this).
+Use the **`.htaccess` edition** for your Apache version —
+[`apache/php2shell-2.4-htaccess.conf`](apache/php2shell-2.4-htaccess.conf) or
+[`apache/php2shell-2.2-htaccess.conf`](apache/php2shell-2.2-htaccess.conf). It is the same
+rules **without** the `<IfModule php_*>` block (`php_admin_flag` is not valid in `.htaccess`
+and 500s the site); the rewrite rule still blocks the multipart upload-progress delivery for
+non-allowlisted clients. To switch PHP's `session.upload_progress` feature off as well you
+need root — use the server/vhost edition above. Takes effect on the next request, no reload.
+Needs `AllowOverride FileInfo` (most shared hosts allow it; don't widen to `All` just for this).
 - No `.htaccess` there yet → save the edition as `.htaccess`.
 - One already exists (WordPress, Laravel…) → **do not overwrite it**; paste this file's
   contents at the **very top**, above the app's own rules. Patch every other `.htaccess`
   under the docroot that has rewrite rules too
   (`find docroot -name .htaccess -exec grep -il rewrite {} +`).
-- **Omit the `<IfModule php_*>` block at the end** — `php_admin_flag` is not allowed in
-  `.htaccess` and 500s the site. The rewrite rule already blocks the multipart
-  upload-progress delivery for non-allowlisted clients; with root, disable the feature
-  via method B/C or php.ini instead.
 
 ### 3. Prove it (don't skip — every failure above is silent)
 
