@@ -6,8 +6,8 @@ for servers running a PHP version you **cannot patch right now**.
 
 | Server | File | Allowlist | Body-size cap |
 |--------|------|-----------|---------------|
-| Apache **2.4** | [`apache/2.4.conf`](apache/2.4.conf) | single IP **or** CIDR range (`expr -R`) | **per-IP** (admins exempt) |
-| Apache **2.2** | [`apache/2.2.conf`](apache/2.2.conf) | single IP, or a regex prefix for a range | global only (optional) |
+| Apache **2.4** | [`apache/php2shell-2.4.conf`](apache/php2shell-2.4.conf) | single IP **or** CIDR range (`expr -R`) | **per-IP** (admins exempt) |
+| Apache **2.2** | [`apache/php2shell-2.2.conf`](apache/php2shell-2.2.conf) | single IP, or a regex prefix for a range | global only (optional) |
 | **Nginx** | [`nginx/php2shell.conf`](nginx/php2shell.conf) | single IP **or** CIDR range (`geo`) | global only (optional) |
 
 ---
@@ -93,7 +93,7 @@ GET and HEAD are left alone):
 ## Pick your server + edition
 
 ```bash
-apachectl -v     # Apache: "Apache/2.4.x" -> apache/2.4.conf ; "Apache/2.2.x" -> apache/2.2.conf
+apachectl -v     # Apache: "Apache/2.4.x" -> apache/php2shell-2.4.conf ; "Apache/2.2.x" -> apache/php2shell-2.2.conf
 nginx -v         # Nginx:  any recent version -> nginx/php2shell.conf
 ```
 
@@ -151,18 +151,45 @@ there is no `mod_remoteip` — block at the proxy/CDN instead. **Never** test
 
 ### 2. Deploy — pick one
 
-- **`.htaccess` (per site, no reload):** if one already exists (WordPress, Laravel…)
-  **do not overwrite it** — paste this file's contents at the **very top**. Patch
-  every other `.htaccess` under the docroot that has rewrite rules too
-  (`find docroot -name .htaccess -exec grep -il rewrite {} +`). Needs
-  `AllowOverride FileInfo` (don't widen to `All` just for this).
-- **Inside each `<VirtualHost>` (survives any `.htaccess`):** paste at vhost level in
-  the `:80` **and** `:443` blocks, then `apachectl -t && systemctl reload apache2`.
-  **Not** at server level alone — a vhost doesn't inherit server rewrite rules.
-- **Server-wide drop-in:** `cp apache/2.4.conf /etc/apache2/conf-available/orbisius-php2shell.conf`
-  then `a2enconf orbisius-php2shell` (or on RHEL, drop into `/etc/httpd/conf.d/`).
-  The body cap applies globally, but the rewrite rule only covers vhosts that inherit
-  it — `.htaccess` or per-vhost is more reliable.
+**A — `.htaccess` (one site, no root, no reload).** Takes effect on the next request;
+needs `AllowOverride FileInfo` (don't widen to `All` just for this).
+- No `.htaccess` in the document root yet → save the edition there as `.htaccess`.
+- One already exists (WordPress, Laravel…) → **do not overwrite it**; paste this file's
+  contents at the **very top**, above the app's own rules. Patch every other
+  `.htaccess` under the docroot that has rewrite rules too
+  (`find docroot -name .htaccess -exec grep -il rewrite {} +`).
+
+**B — one `<VirtualHost>` (one site, needs root + reload; survives any `.htaccess`).**
+Paste the blocks at vhost level in the `:80` **and** the `:443` block, then reload:
+```bash
+apachectl -t && systemctl reload apache2
+```
+
+**C — server config = GLOBAL (EVERY site on the box; needs root + reload).** Adding the
+rules to the server configuration applies them to **every virtual host / every site this
+Apache instance serves, all at once** — one place, no per-site edits, nothing to repeat
+when you add a site later. With root, `Include` the repo file in place (any distro):
+```bash
+# add this line in httpd.conf / apache2.conf, or any file it already includes:
+Include /path/to/orbisius-php2shell-protection/apache/php2shell-2.4.conf
+```
+or use your distro's drop-in directory (same effect — both just `Include` the file):
+```bash
+# Debian / Ubuntu:
+cp apache/php2shell-2.4.conf /etc/apache2/conf-available/orbisius-php2shell.conf
+a2enconf orbisius-php2shell
+# RHEL / Alma / Rocky:
+cp apache/php2shell-2.4.conf /etc/httpd/conf.d/orbisius-php2shell.conf
+```
+Then test the config and reload (`httpd` instead of `apache2` on RHEL):
+```bash
+apachectl -t && systemctl reload apache2
+```
+**One caveat for virtual-host setups:** the body cap is inherited by every vhost as
+written, but Apache does **not** inherit server-level `mod_rewrite` rules into a
+`<VirtualHost>`, so the 404 rule reaches only vhosts that pull it in. On Apache 2.4.8+
+add, at server level, `RewriteOptions InheritDownBefore` (each vhost still needs its own
+`RewriteEngine On`); otherwise deploy per site with A or B.
 
 ### 3. Prove it (don't skip — every failure above is silent)
 
